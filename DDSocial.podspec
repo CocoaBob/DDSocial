@@ -38,14 +38,14 @@ Pod::Spec.new do |s|
 
   s.subspec 'Facebook' do |facebook|
     facebook.source_files = 'DDSocial/Facebook/*.{h,m}'
-    facebook.dependency 'FBSDKLoginKit', '~> 4.10.0'
-    facebook.dependency 'FBSDKShareKit', '~> 4.10.0'
+    facebook.dependency 'FBSDKLoginKit', '~> 4'
+    facebook.dependency 'FBSDKShareKit', '~> 4'
     facebook.dependency 'DDSocial/Core'
   end
 
   s.subspec 'Twitter' do |twitter|
     twitter.source_files = 'DDSocial/Twitter/*.{h,m}'
-    twitter.dependency 'TwitterKit','~> 2.0.2'
+    twitter.dependency 'TwitterKit','~> 2'
     twitter.dependency 'DDSocial/Core'
     twitter.xcconfig = { 'CLANG_ENABLE_MODULES' => 'NO' }
   end
