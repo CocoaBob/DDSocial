@@ -26,7 +26,7 @@ Pod::Spec.new do |s|
 
   s.subspec 'Wechat' do |wechat|
     wechat.source_files = 'DDSocial/Wechat/*.{h,m}'
-    wechat.dependency 'libWeChatSDK'
+    wechat.dependency 'WechatOpenSDK'
     wechat.dependency 'DDSocial/Core'
   end
 
