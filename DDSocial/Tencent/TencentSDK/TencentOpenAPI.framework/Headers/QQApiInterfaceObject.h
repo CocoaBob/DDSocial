@@ -24,10 +24,17 @@ typedef enum
     EQQAPIAPPSHAREASYNC = 7,
     EQQAPIQQNOTSUPPORTAPI_WITH_ERRORSHOW = 8,
     EQQAPISENDFAILD = -1,
+    EQQAPISHAREDESTUNKNOWN = -2, //未指定分享到QQ或TIM
+    
+    EQQAPITIMNOTINSTALLED = 11, //TIM未安装
+    EQQAPITIMNOTSUPPORTAPI = 12, // TIM api不支持
     //qzone分享不支持text类型分享
     EQQAPIQZONENOTSUPPORTTEXT = 10000,
     //qzone分享不支持image类型分享
     EQQAPIQZONENOTSUPPORTIMAGE = 10001,
+    //当前QQ版本太低，需要更新至新版本才可以支持
+    EQQAPIVERSIONNEEDUPDATE = 10002,
+    ETIMAPIVERSIONNEEDUPDATE = 10004,
 } QQApiSendResultCode;
 
 #pragma mark - QQApiObject(分享对象类型)
@@ -42,15 +49,27 @@ enum
     kQQAPICtrlFlagQQShareDataline = 0x10,  //数据线
 };
 
+// 分享到QQ或TIM
+typedef enum ShareDestType {
+    ShareDestTypeQQ = 0,
+    ShareDestTypeTIM,
+    ShareDestTypeQIM,
+}ShareDestType;
+
 // QQApiObject
 /** \brief 所有在QQ及插件间发送的数据对象的根类。
  */
-@interface QQApiObject : NSObject
+__attribute__((visibility("default"))) @interface QQApiObject : NSObject
 @property(nonatomic,retain) NSString* title; ///< 标题，最长128个字符
 @property(nonatomic,retain) NSString* description; ///<简要描述，最长512个字符
 
 @property (nonatomic, assign) uint64_t cflag;
-
+/*
+ * 分享到QQ/TIM/QIM
+ * SDK根据是否安装对应客户端进行判断，判断顺序：QQ > TIM > QIM
+ * 默认分享到QQ，如果QQ未安装检测TIM是否安装，如果TIM未安装检测是否安装QIM
+ */
+@property (nonatomic, assign) ShareDestType shareDestType;
 @end
 
 // QQApiResultObject
@@ -66,7 +85,7 @@ enum
  <TR><TD>-5</TD><TD>client internal error</TD><TD>客户端内部处理错误</TD></TR>
  </TABLE>
  */
-@interface QQApiResultObject : QQApiObject
+__attribute__((visibility("default"))) @interface QQApiResultObject : QQApiObject
 @property(nonatomic,retain) NSString* error; ///<错误
 @property(nonatomic,retain) NSString* errorDescription; ///<错误描述
 @property(nonatomic,retain) NSString* extendInfo; ///<扩展信息
@@ -94,7 +113,7 @@ typedef enum QQApiURLTargetType{
  
  包括URL地址，URL地址所指向的目标类型及预览图像。
  */
-@interface QQApiURLObject : QQApiObject
+__attribute__((visibility("default"))) @interface QQApiURLObject : QQApiObject
 /**
  URL地址所指向的目标类型.
  @note 参见QQApi.h 中的 QQApiURLTargetType 定义.
@@ -175,6 +194,52 @@ typedef enum QQApiURLTargetType{
 @interface QQApiImageObject : QQApiExtendObject
 @end
 
+// QQApiImageArrayForQZoneObject
+/** @brief 图片对象
+ 用于分享图片到空间，走写说说路径，是一个指定为图片类型的，当图片数组为空时，默认走文本写说说<code>QQApiObject</code>
+ */
+@interface QQApiImageArrayForQZoneObject : QQApiObject
+
+@property(nonatomic,retain) NSArray* imageDataArray;///图片数组
+@property(nonatomic,retain) NSDictionary* extMap; // 扩展字段
+
+/**
+ 初始化方法
+ @param imageDataArray 图片数组
+ @param title 写说说的内容，可以为空
+ @param extMap 扩展字段
+ */
+- (id)initWithImageArrayData:(NSArray*)imageDataArray title:(NSString*)title extMap:(NSDictionary *)extMap;
+
+/**
+ helper方法获取一个autorelease的<code>QQApiExtendObject</code>对象
+ @param title 写说说的内容，可以为空
+ @param imageDataArray 发送的多张图片队列
+ @param extMap 扩展字段
+ @return
+ 一个自动释放的<code>QQApiExtendObject</code>实例
+ */
++ (id)objectWithimageDataArray:(NSArray*)imageDataArray title:(NSString*)title extMap:(NSDictionary *)extMap;
+
+@end
+
+// QQApiVideoForQZoneObject
+/** @brief 视频对象
+ 用于分享视频到空间，走写说说路径<code>QQApiObject</code>
+ assetURL可传ALAsset的ALAssetPropertyAssetURL，或者PHAsset的localIdentifier
+  @param extMap 扩展字段
+ */
+@interface QQApiVideoForQZoneObject : QQApiObject
+
+@property(nonatomic, retain) NSString *assetURL;
+@property(nonatomic,retain) NSDictionary* extMap; // 扩展字段
+
+- (id)initWithAssetURL:(NSString*)assetURL title:(NSString*)title extMap:(NSDictionary *)extMap;
+
++ (id)objectWithAssetURL:(NSString*)assetURL title:(NSString*)title extMap:(NSDictionary *)extMap;
+
+@end
+
 // QQApiWebImageObject
 /** @brief 图片对象
  用于分享网络图片内容的对象，是一个指定网络图片url的: 该类型只在2.9.0的h5分享中才支持，
@@ -199,23 +264,6 @@ typedef enum QQApiURLTargetType{
  @param description 此对象，分享的描述
  */
 + (id)objectWithPreviewImageURL:(NSURL*)previewImageURL title:(NSString*)title description:(NSString*)description;
-
-@end
-
-// QQApiGroupTribeImageObject
-/** @brief 群部落图片对象
- 用于分享图片内容的对象，是一个指定为图片类型的 可以指定一些其他的附加数据<code>QQApiExtendObject</code>
- */
-@interface QQApiGroupTribeImageObject : QQApiImageObject
-{
-    NSString *_bid;
-    NSString *_bname;
-}
-// 群部落id
-@property (nonatomic, retain)NSString* bid;
-
-// 群部落名称
-@property (nonatomic, retain)NSString* bname;
 
 @end
 
@@ -321,17 +369,6 @@ typedef enum QQApiURLTargetType{
 
 @end
 
-// QQApiPayObject
-/** \brief 支付对象
- */
-@interface QQApiPayObject : QQApiObject
-@property(nonatomic,retain)NSString* OrderNo; ///<支付订单号，必填
-@property(nonatomic,retain)NSString* AppInfo; ///<支付来源信息，必填
-
--(id)initWithOrderNo:(NSString*)OrderNo AppInfo:(NSString*)AppInfo; ///<初始化方法
-+(id)objectWithOrderNo:(NSString*)OrderNo AppInfo:(NSString*)AppInfo;///<工厂方法，获取一个QQApiPayObject对象.
-@end
-
 // QQApiCommonContentObject;
 /** @brief 通用模板类型对象
  用于分享一个固定显示模板的图文混排对象
@@ -365,52 +402,6 @@ typedef enum QQApiURLTargetType{
 @property(nonatomic,retain) NSURL* target;///<广告目标链接
 @end
 
-// QQApiWPAObject
-/** \brief 发起WPA对象
- */
-@interface QQApiWPAObject : QQApiObject
-@property(nonatomic,retain)NSString* uin; ///<想要对话的QQ号
-
--(id)initWithUin:(NSString*)uin; ///<初始化方法
-+(id)objectWithUin:(NSString*)uin;///<工厂方法，获取一个QQApiWPAObject对象.
-@end
-
-// QQApiAddFriendObject
-/** \brief 添加好友
- */
-@interface QQApiAddFriendObject : QQApiObject
-@property (nonatomic,retain)NSString* openID;
-@property (nonatomic,retain)NSString* subID;
-@property (nonatomic,retain)NSString* remark;
-
--(id)initWithOpenID:(NSString*)openID; ///<初始化方法
-+(id)objecWithOpenID:(NSString*)openID; ///<工厂方法，获取一个QQApiAddFriendObject对象.
-
-@end
-
-// QQApiGameConsortiumBindingGroupObject
-/** \brief 游戏公会绑定群
- */
-@interface QQApiGameConsortiumBindingGroupObject : QQApiObject
-@property (nonatomic,retain)NSString* signature;
-@property (nonatomic,retain)NSString* unionid;
-@property (nonatomic,retain)NSString* zoneID;
-@property (nonatomic,retain)NSString* appDisplayName;
-
--(id)initWithGameConsortium:(NSString*)signature unionid:(NSString*)unionid zoneID:(NSString*)zoneID appDisplayName:(NSString*)appDisplayName; ///<初始化方法
-+(id)objectWithGameConsortium:(NSString*)signature unionid:(NSString*)unionid zoneID:(NSString*)zoneID appDisplayName:(NSString*)appDisplayName; ///<工厂方法，获取一个QQApiAddFriendObject对象.
-
-@end
-
-// QQApiGroupChatObject
-/** \brief 发起群会话对象
- */
-@interface QQApiGroupChatObject : QQApiObject
-@property(nonatomic,retain)NSString* groupID; ///<想要对话的群号
-
--(id)initWithGroup:(NSString*)groupID; ///<初始化方法
-+(id)objectWithGroup:(NSString*)groupID;///<工厂方法，获取一个QQApiGroupChatObject对象.
-@end
 
 #pragma mark - QQApi请求消息类型
 
@@ -476,23 +467,6 @@ enum QQApiInterfaceRespType
 @end
 
 /**
- GetMessageFromQQResp应答帮助类
- */
-@interface GetMessageFromQQResp : QQBaseResp
-
-/**
- 创建一个GetMessageFromQQResp应答实例
- \param message 具体分享消息实例
- \return 新创建的GetMessageFromQQResp应答实例
- */
-+ (GetMessageFromQQResp *)respWithContent:(QQApiObject *)message;
-
-/** 具体分享消息 */
-@property (nonatomic, retain) QQApiObject *message;
-
-@end
-
-/**
  SendMessageToQQReq请求帮助类
  */
 @interface SendMessageToQQReq : QQBaseReq
@@ -542,19 +516,5 @@ enum QQApiInterfaceRespType
 
 @end
 
-/**
- ShowMessageFromQQResp应答帮助类
- */
-@interface ShowMessageFromQQResp : QQBaseResp
-
-/**
- 创建一个ShowMessageFromQQResp应答实例
- \param result 展现消息结果
- \param errDesp 具体错误描述信息
- \return 新创建的ShowMessageFromQQResp应答实例
- */
-+ (ShowMessageFromQQResp *)respWithResult:(NSString *)result errorDescription:(NSString *)errDesp;
-
-@end
 
 #endif
